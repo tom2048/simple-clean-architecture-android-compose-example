@@ -4,9 +4,11 @@
 
 ### About
 
-This is just a raw example of some clean architecture implementations. The main assumption of the
+This is just an example of the Android Clean Architecture implementation. The main assumption of the
 project is to be as simple as possible,
 but also provide layers possible to be tested by unit tests.
+
+The Clean Architecture approach was described by Robert C. Martin here: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html.
 
 ### Main advantages of this architecture:
 
