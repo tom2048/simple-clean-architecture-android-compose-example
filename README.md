@@ -57,7 +57,7 @@ When using the project structure described above, it's also possible to easily i
 3. The development starts - all unit and snapshot tests should be prepared first, before the main application components.
 
 
-4. We proceed with further work by testing system components using the tests prepared in the previous step. During the process, we refine details that may not have been uncovered during the preparation of basic elements and tests.
+4. We proceed with main development and we create all the application components using the tests prepared in the previous step for verification. During the process, we refine details that may not have been uncovered during the preparation of basic elements and tests.
 
 
 5. The final step is to assemble all the elements together. After that, most functions should work correctly, however some integration improvements may also be necessary. The tasks of refining elements are assigned according to the earlier assignment of work as much as possible.
