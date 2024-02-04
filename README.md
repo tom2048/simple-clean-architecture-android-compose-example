@@ -88,7 +88,6 @@ When using the project structure described above, it's also possible to easily i
 
 5. The final step is to assemble all the elements together. After that, most functions should work correctly, however some integration improvements may also be necessary. The tasks of refining elements are assigned according to the earlier assignment of work as much as possible.
 
-### Workflow diagram:
 ![TDD diagram](./docs/img/simple-tdd-workflow-v1.jpg)
 
 ### Workflow example:
