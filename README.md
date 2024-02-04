@@ -2,7 +2,7 @@
 
 # Simple Clean Architecture - Android Compose Example
 
-### About
+## About
 
 This is just an example of the Android Clean Architecture implementation. The main assumption of the
 project is to be as simple as possible,
@@ -10,7 +10,7 @@ but also provide layers possible to be tested by unit tests.
 
 The Clean Architecture approach was described by Robert C. Martin here: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html.
 
-### Main advantages of this architecture:
+## Main advantages of this architecture:
 
 - viewModel and use case layers testable by unit test
 - clear separation of data logic from the layout
@@ -20,7 +20,33 @@ The Clean Architecture approach was described by Robert C. Martin here: https://
 - clear separation of concerns
 - minimal and unified set of architecture components
 
-### Practical/pragmatic remarks:
+## Components and layers:
+In order to provide best performance, simplicity and scalability of this architecture, the layers should meet several requirements described below. 
+
+### Repositories
+Repositories are responsible for providing data for the application logic (use cases and interactors). Repository is an interface with dedicated implementation, where only the interface is visible for the application logic layer and the implementation is provided using dependency injection. Repository methods can be single or multithreaded, however the multithreaded methods should autonomously manage the threads they use and cannot rely on the threads defined by the method caller. The caller should only care about its own thread.
+Repository interface methods should use only basic data types that can be handled by the unit test environment, otherwise tests maintenance will be much more complex. Data classes with basic data types would work best.
+On the other hand, repository implementation is free to use any required types, libraries, services, SDKs and APIs in order to get the data, as long as it's possible to map the result to the repository interface requirements. Using Android SDK classes (like application Context) in the implementation is also fine as long as it doesn't cause any issues such as memory leaks or performance issues.
+
+### Use cases and interactors
+This layer is considered as a set of application functions processing the data. Its responsibility is only to process the data from parameters and repositories into another data as a result. All these functions form the rules of application logic.  
+Use case is the part of application logic that fulfill single, specific function. It consists of an interface and its implementation. Use case interface is required to be a functional interface (SAM Kotlin interface). Use case implementation should be stateless single or multithreaded function where multithreaded code should maintain its threads autonomously without the need for external management.  
+Interactor is a set of use cases or other stateless functions processing data.  
+In order to handle some specific requirements, use cases and interactors can be reused and combined into more general use cases.  
+In general, this layer can be compared to a composite mathematical function - all the data collected from user input and repositories is processed by a set of functions and use cases that produce the output result, so functional programming approach can be very handy. This means that in order to simplify the code, some common application components could be migrated into simple functions. For example we could implement validators as interactors.  
+All components of this layer should be testable using unit tests, therefore they should only use data classes and basic data types that can be easily processed in unit test environment. Otherwise tests maintenance will be much more difficult and complex.
+
+### ViewModel with state object
+ViewModel layer contains the logic for the view presentation. It is responsible for the logic of the screen presented to the user. It should get the data from use cases and user input, process it and present the result for the View layer using UI state object and set of UI effects. User input is handled by a set of user actions defined as methods.  
+The UI state object is a data class containing the state of View elements and is emitted on every change to the View layer. Every emission of the UI state causes View recomposition. The UI state should contain only the values with some logic behind which can't be simply put in the View, like data from use cases, ViewModel specific logic or input controls values.   
+The UI effect is defined as an enum or sealed class and contains definitions of UI one-time events that should be emitted to the View and rendered. For example, it can be a snackbar event.  
+The user actions are methods in ViewModel, that can be called by the View to handle some user action e.g. user login or refresh screen. Usualy such actions cause a new UI state or effect emission.  
+All components of this layer should be testable using unit tests, therefore they should only use data classes and basic data types that can be easily processed in unit test environment. Otherwise unit tests maintenance will be much more difficult and complex.
+
+### View
+View layer is responsible for visual representation of the ViewModel data on screen displayed to the user. It should react for the UI state and effects emissions and refresh corresponding parts of the layout. It should also pass the user actions to the ViewModel using defined ViewModel methods. It should contain as less logic as possible and rely on the ViewModel logic. In this project it's represented by the Jetpack Compose layouts.
+
+## Practical/pragmatic remarks:
 
 - it's hard to completely avoid references to Android classes in any part of code as sometimes there
   is just no effective way to reconcile
@@ -35,7 +61,7 @@ The Clean Architecture approach was described by Robert C. Martin here: https://
 - TODO: other remarks
 
 
-### Simple Clean TDD Workflow
+## Simple TDD Workflow
 
 When using the project structure described above, it's also possible to easily implement the Test Driven Development approach and distribute tasks among team members more swiftly. Let's consider single screen workflow.
 
@@ -44,7 +70,7 @@ When using the project structure described above, it's also possible to easily i
    - empty layout
    - use case interfaces
    - repository interfaces
-   - set of empty unit and snapshot tests checking the previously mentioned elements
+   - set of empty unit and snapshot tests which after implementation will verify the previously mentioned elements
   
    If necessary, the components above can be determined by one person. However, collaborative agreements allow for a broader perspective on the project and capture a greater number of edge cases and possible issues. This results in more precise preliminary agreements and the better project awareness among the team members.
    
@@ -62,6 +88,8 @@ When using the project structure described above, it's also possible to easily i
 
 5. The final step is to assemble all the elements together. After that, most functions should work correctly, however some integration improvements may also be necessary. The tasks of refining elements are assigned according to the earlier assignment of work as much as possible.
 
+### Workflow diagram:
+![TDD diagram](./docs/img/simple-tdd-workflow-v1.jpg)
 
 ### Workflow example:
 Bob, Alice and John are developers working in a three-person team together. The team has been tasked with adding a new user authorization screen to the application. Alice will lead the project. Example workflow could look like this:
