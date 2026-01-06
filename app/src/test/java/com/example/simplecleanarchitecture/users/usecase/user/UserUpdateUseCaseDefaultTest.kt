@@ -1,101 +1,110 @@
 package com.example.simplecleanarchitecture.users.usecase.user
 
-import com.example.simplecleanarchitecture.core.lib.resources.AppResources
 import com.example.simplecleanarchitecture.core.lib.schedulers.MainCoroutineRule
-import com.example.simplecleanarchitecture.core.lib.utils.CoroutineDefaultTestHelper
-import com.example.simplecleanarchitecture.core.lib.utils.CoroutineTestHelper
-import com.example.simplecleanarchitecture.core.lib.utils.mockObserver
-import com.example.simplecleanarchitecture.core.model.User
-import com.example.simplecleanarchitecture.core.repository.AssetsRepository
-import com.example.simplecleanarchitecture.core.repository.StorageRepository
-import com.example.simplecleanarchitecture.core.repository.UsersRepository
+import com.example.simplecleanarchitecture.core.lib.utils.DefaultTestHelper
+import com.example.simplecleanarchitecture.core.lib.utils.TestHelper
+import com.example.simplecleanarchitecture.core.mock.Mocks
+import com.example.simplecleanarchitecture.core.mock.repository.AssetsRepositoryMockTestHelper
+import com.example.simplecleanarchitecture.core.mock.repository.StorageRepositoryMockTestHelper
+import com.example.simplecleanarchitecture.core.mock.repository.UsersRepositoryMockTestHelper
+import com.example.simplecleanarchitecture.data.repository.AssetsRepository
+import com.example.simplecleanarchitecture.data.repository.StorageRepository
+import com.example.simplecleanarchitecture.data.repository.UsersRepository
+import com.example.simplecleanarchitecture.data.repository.model.Asset
+import com.example.simplecleanarchitecture.data.repository.model.UserDetails
+import com.example.simplecleanarchitecture.domain.usecase.user.UserUpdateUseCase
+import com.example.simplecleanarchitecture.domain.usecase.user.UserUpdateUseCaseDefault
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import org.koin.dsl.module
+import org.koin.test.KoinTest
+import org.koin.test.KoinTestRule
+import org.koin.test.get
 import org.mockito.kotlin.any
-import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
-import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.reset
+import org.mockito.kotlin.stub
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class UserUpdateUseCaseDefaultTest : CoroutineTestHelper by CoroutineDefaultTestHelper() {
+class UserUpdateUseCaseDefaultTest : TestHelper by DefaultTestHelper(),
+    KoinTest,
+    UsersRepositoryMockTestHelper,
+    AssetsRepositoryMockTestHelper,
+    StorageRepositoryMockTestHelper {
 
     @get:Rule
     val coroutineRule = MainCoroutineRule()
 
-    private lateinit var userUpdateUseCase: UserUpdateUseCase
-
-    private lateinit var storageRepository: StorageRepository
-    private lateinit var usersRepository: UsersRepository
-    private lateinit var assetsRepository: AssetsRepository
-    private lateinit var appResources: AppResources
-
-    @BeforeTest
-    fun setupTest() {
-        storageRepository = mock {
-            on { load(any()) } doReturn testFlowOf("test".toByteArray())
-        }
-        usersRepository = mock {
-            on { insert(any()) } doReturn testFlowOf(DEFAULT_USER.id!!)
-            on { update(any()) } doReturn testFlowOf()
-        }
-        assetsRepository = mock {
-            on { saveAsset(any(), any(), any(), any()) } doReturn testFlowOf("file://uri")
-        }
-        appResources = mock()
-        userUpdateUseCase =
-            UserUpdateUseCaseDefault(storageRepository, usersRepository, assetsRepository, appResources)
-    }
-
-    @AfterTest
-    fun cleanupTest() {
-        // Cleanup if needed
-    }
-
-
-    @Test
-    fun `invoke() executes insert when empty user id`() = runTest(UnconfinedTestDispatcher()) {
-        whenever(usersRepository.insert(any())).thenReturn(testFlowOf(DEFAULT_USER.id!!))
-        whenever(usersRepository.update(any())).thenReturn(testFlowOf())
-        val newUserInput = UserUpdateUseCase.Input(
-            id = null,
-            nickname = DEFAULT_USER.nickname,
-            email = DEFAULT_USER.email,
-            description = DEFAULT_USER.description,
-            avatarUri = DEFAULT_USER.avatarUri,
-            idScanUri = DEFAULT_USER.idScanUri
+    @get:Rule
+    val koinTestRule = KoinTestRule.create {
+        modules(
+            module {
+                single { createTestDispatchers() }
+                single { createTestAppResources() }
+                single { createUsersRepositoryMock() }
+                single { createAssetsRepositoryMock() }
+                single { createStorageRepositoryMock() }
+                single { UserUpdateUseCaseDefault(get(), get(), get(), get(), get()) }
+            }
         )
+        setMocks()
+    }
 
-        val testObserver = userUpdateUseCase(newUserInput).mockObserver(this)
+    private fun setMocks(
+        loadAssetContents: (String) -> ByteArray = { Mocks.Storage.defaultAssetContents },
+        updateUserDetails: (UserDetails) -> Unit = {},
+        saveAssetDetails: (String, ByteArray, String, Asset.Type) -> String = { _, _, _, _ -> Mocks.Asset.default.uri }
+    ) {
+        get<StorageRepository>().stub {
+            reset(mock)
+            setStorageRepositoryMock(loadResult = loadAssetContents)
+        }
+        get<UsersRepository>().stub {
+            reset(mock)
+            setUsersRepositoryMock(updateResult = updateUserDetails)
+        }
+        get<AssetsRepository>().stub {
+            reset(mock)
+            setAssetsRepositoryMock(saveAssetResult = saveAssetDetails)
+        }
+    }
 
-        verify(testObserver).onCompletion()
-        verify(usersRepository, times(1)).insert(any())
-        verify(usersRepository, never()).update(any())
+    private fun getUseCase() = get<UserUpdateUseCaseDefault>()
+
+
+    @Test
+    fun `should execute insert when empty user id`() = runTest(StandardTestDispatcher()) {
+        val useCase = getUseCase()
+
+        useCase.invoke(NEW_USER_INPUT)
+
+        verify(get<UsersRepository>(), times(1)).insert(any())
+        verify(get<UsersRepository>(), never()).update(any())
     }
 
     @Test
-    fun `invoke() executes update when empty user id`() = runTest(UnconfinedTestDispatcher()) {
-        val testObserver = userUpdateUseCase(EXISTING_USER_INPUT).mockObserver(this)
+    fun `should execute update when not empty user id`() = runTest(StandardTestDispatcher()) {
+        val useCase = getUseCase()
 
-        verify(testObserver).onCompletion()
-        verify(usersRepository, never()).insert(any())
-        verify(usersRepository, times(1)).update(any())
+        useCase.invoke(EXISTING_USER_INPUT)
+
+        verify(get<UsersRepository>(), never()).insert(any())
+        verify(get<UsersRepository>(), times(1)).update(any())
     }
 
     @Test
-    fun `invoke() saves avatar photo when avatar uri not null and new user added`() = runTest(UnconfinedTestDispatcher()) {
-        val testObserver = userUpdateUseCase(ADD_ATTACHMENTS_NEW_USER_INPUT).mockObserver(this)
+    fun `should save avatar photo when avatar uri not null and new user added`() = runTest(StandardTestDispatcher()) {
+        val useCase = getUseCase()
 
-        verify(testObserver).onCompletion()
-        verify(assetsRepository, times(1)).saveAsset(
+        useCase.invoke(ADD_ATTACHMENTS_NEW_USER_INPUT)
+
+        verify(get<AssetsRepository>(), times(1)).saveAsset(
             eq(ADD_ATTACHMENTS_NEW_USER_INPUT.avatarUri!!.split("/").last()),
             any(),
             any(),
@@ -104,11 +113,12 @@ class UserUpdateUseCaseDefaultTest : CoroutineTestHelper by CoroutineDefaultTest
     }
 
     @Test
-    fun `invoke() saves avatar photo when avatar uri not null and existing user edited`() = runTest(UnconfinedTestDispatcher()) {
-        val testObserver = userUpdateUseCase(ADD_ATTACHMENTS_EXISTING_USER_INPUT).mockObserver(this)
+    fun `should save avatar photo when avatar uri not null and existing user edited`() = runTest(StandardTestDispatcher()) {
+        val useCase = getUseCase()
 
-        verify(testObserver).onCompletion()
-        verify(assetsRepository, times(1)).saveAsset(
+        useCase.invoke(ADD_ATTACHMENTS_EXISTING_USER_INPUT)
+
+        verify(get<AssetsRepository>(), times(1)).saveAsset(
             eq(ADD_ATTACHMENTS_EXISTING_USER_INPUT.avatarUri!!.split("/").last()),
             any(),
             any(),
@@ -117,11 +127,12 @@ class UserUpdateUseCaseDefaultTest : CoroutineTestHelper by CoroutineDefaultTest
     }
 
     @Test
-    fun `invoke() saves id scan photo when id scan uri not null and new user added`() = runTest(UnconfinedTestDispatcher()) {
-        val testObserver = userUpdateUseCase(ADD_ATTACHMENTS_NEW_USER_INPUT).mockObserver(this)
+    fun `should save id scan photo when id scan uri not null and new user added`() = runTest(StandardTestDispatcher()) {
+        val useCase = getUseCase()
 
-        verify(testObserver).onCompletion()
-        verify(assetsRepository, times(1)).saveAsset(
+        useCase.invoke(ADD_ATTACHMENTS_NEW_USER_INPUT)
+
+        verify(get<AssetsRepository>(), times(1)).saveAsset(
             eq(ADD_ATTACHMENTS_NEW_USER_INPUT.idScanUri!!.split("/").last()),
             any(),
             any(),
@@ -130,11 +141,12 @@ class UserUpdateUseCaseDefaultTest : CoroutineTestHelper by CoroutineDefaultTest
     }
 
     @Test
-    fun `invoke() saves id scan photo when id scan uri not null and existing user edited`() = runTest(UnconfinedTestDispatcher()) {
-        val testObserver = userUpdateUseCase(ADD_ATTACHMENTS_EXISTING_USER_INPUT).mockObserver(this)
+    fun `should save id scan photo when id scan uri not null and existing user edited`() = runTest(StandardTestDispatcher()) {
+        val useCase = getUseCase()
 
-        verify(testObserver).onCompletion()
-        verify(assetsRepository).saveAsset(
+        useCase.invoke(ADD_ATTACHMENTS_EXISTING_USER_INPUT)
+
+        verify(get<AssetsRepository>()).saveAsset(
             eq(ADD_ATTACHMENTS_EXISTING_USER_INPUT.idScanUri!!.split("/").last()),
             any(),
             any(),
@@ -144,12 +156,7 @@ class UserUpdateUseCaseDefaultTest : CoroutineTestHelper by CoroutineDefaultTest
 
 
     companion object {
-        private val DEFAULT_USER = User(
-            "a312b3ee-84c2-11eb-8dcd-0242ac130003",
-            "Testnick",
-            "test@test.com",
-            "Test description"
-        )
+        private val DEFAULT_USER = Mocks.User.detailsDefault
 
         private val EXISTING_USER_INPUT = UserUpdateUseCase.Input(
             id = DEFAULT_USER.id,

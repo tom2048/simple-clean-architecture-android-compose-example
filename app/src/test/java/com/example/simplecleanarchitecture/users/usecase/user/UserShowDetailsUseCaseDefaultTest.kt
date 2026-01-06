@@ -2,102 +2,98 @@ package com.example.simplecleanarchitecture.users.usecase.user
 
 import com.example.simplecleanarchitecture.core.lib.TestException
 import com.example.simplecleanarchitecture.core.lib.schedulers.MainCoroutineRule
-import com.example.simplecleanarchitecture.core.lib.utils.CoroutineDefaultTestHelper
-import com.example.simplecleanarchitecture.core.lib.utils.CoroutineTestHelper
-import com.example.simplecleanarchitecture.core.lib.utils.mockObserver
-import com.example.simplecleanarchitecture.core.model.User
-import com.example.simplecleanarchitecture.core.repository.AssetsRepository
-import com.example.simplecleanarchitecture.core.repository.UsersRepository
-import com.example.simplecleanarchitecture.core.repository.model.UserDetails
+import com.example.simplecleanarchitecture.core.lib.utils.DefaultTestHelper
+import com.example.simplecleanarchitecture.core.lib.utils.TestHelper
+import com.example.simplecleanarchitecture.core.mock.Mocks
+import com.example.simplecleanarchitecture.core.mock.repository.AssetsRepositoryMockTestHelper
+import com.example.simplecleanarchitecture.core.mock.repository.UsersRepositoryMockTestHelper
+import com.example.simplecleanarchitecture.data.repository.AssetsRepository
+import com.example.simplecleanarchitecture.data.repository.UsersRepository
+import com.example.simplecleanarchitecture.data.repository.model.Asset
+import com.example.simplecleanarchitecture.data.repository.model.UserDetails
+import com.example.simplecleanarchitecture.domain.usecase.user.UserShowDetailsUseCaseDefault
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.last
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import org.koin.dsl.module
+import org.koin.test.KoinTest
+import org.koin.test.KoinTestRule
+import org.koin.test.get
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argWhere
-import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.reset
+import org.mockito.kotlin.stub
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class UserShowDetailsUseCaseDefaultTest : CoroutineTestHelper by CoroutineDefaultTestHelper() {
+class UserShowDetailsUseCaseDefaultTest : TestHelper by DefaultTestHelper(), KoinTest, UsersRepositoryMockTestHelper, AssetsRepositoryMockTestHelper {
 
     @get:Rule
     val coroutineRule = MainCoroutineRule()
 
-    private lateinit var userDetailsUseCase: UserShowDetailsUseCaseDefault
-
-    private lateinit var usersRepository: UsersRepository
-    private lateinit var assetsRepository: AssetsRepository
-
-
-    @BeforeTest
-    fun setUp() {
-        usersRepository = mock()
-        assetsRepository = mock()
-        userDetailsUseCase = UserShowDetailsUseCaseDefault(usersRepository, assetsRepository)
+    @get:Rule
+    val koinTestRule = KoinTestRule.create {
+        modules(
+            module {
+                single { createTestDispatchers() }
+                single { createUsersRepositoryMock() }
+                single { createAssetsRepositoryMock() }
+                single { UserShowDetailsUseCaseDefault(get(), get(), get()) }
+            }
+        )
+        setMocks()
     }
 
-    @AfterTest
-    fun cleanupDown() {
-        // Cleanup if needed
+    private fun setMocks(
+        getUserDetails: (String) -> UserDetails = { Mocks.UserDetails.detailsDefault },
+        getAssetDetails: (String, Asset.Type) -> Asset = { _, _ -> Mocks.Asset.default }
+    ) {
+        get<UsersRepository>().stub {
+            reset(mock)
+            setUsersRepositoryMock(getResult = getUserDetails)
+        }
+        get<AssetsRepository>().stub {
+            reset(mock)
+            setAssetsRepositoryMock(getAssetResult = getAssetDetails)
+        }
     }
-
 
     @Test
-    fun `invoke() merges user details and assets when user exists`() = runTest(UnconfinedTestDispatcher()) {
-        val expected = User(
-            DEFAULT_USER.id,
-            DEFAULT_USER.nickname,
-            DEFAULT_USER.email,
-            DEFAULT_USER.description
-        )
-        whenever(usersRepository.get(any())).thenReturn(testFlowOf(DEFAULT_USER))
+    fun `should merge user details and assets when user exists`() = runTest(StandardTestDispatcher()) {
+        setMocks()
+        val useCase = get<UserShowDetailsUseCaseDefault>()
+        val expected = Mocks.User.detailsDefault
 
-        val result = userDetailsUseCase(DEFAULT_USER.id!!).last()
+        val result = useCase(Mocks.UserDetails.detailsDefault.id!!)
+        advanceUntilIdle()
 
         assert(result == expected)
-        verify(usersRepository).get(any())
+        verify(get<UsersRepository>()).get(any())
     }
 
     @Test
-    fun `invoke() don't load assets when user don't exists`() = runTest(UnconfinedTestDispatcher()) {
-        whenever(usersRepository.get(any())).thenReturn(testFlowOf(TestException()))
+    fun `should not load assets when user don't exists`() = runTest(StandardTestDispatcher()) {
+        setMocks(getUserDetails = { throw TestException() })
+        val useCase = get<UserShowDetailsUseCaseDefault>()
 
-        userDetailsUseCase.invoke(DEFAULT_USER.id!!).mockObserver(this)
-        verify(usersRepository).get(any())
+        runCatching { useCase.invoke(Mocks.UserDetails.detailsDefault.id!!) }
+
+        verify(get<UsersRepository>()).get(any())
+        verify(get<AssetsRepository>(), never()).getAsset(any(), any())
     }
 
     @Test
-    fun `invoke() doesn't result with error when user exists and photo doesn't`() = runTest(UnconfinedTestDispatcher()) {
-        val expected = User(
-            DEFAULT_USER.id,
-            DEFAULT_USER.nickname,
-            DEFAULT_USER.email,
-            DEFAULT_USER.description,
-            null
-        )
-        whenever(usersRepository.get(any())).thenReturn(testFlowOf(DEFAULT_USER))
+    fun `should not result with error when user exists and photo doesn't`() = runTest(StandardTestDispatcher()) {
+        setMocks()
+        val useCase = get<UserShowDetailsUseCaseDefault>()
+        val expected = Mocks.User.detailsDefault
 
-        val observer = userDetailsUseCase.invoke(DEFAULT_USER.id!!).mockObserver(this)
+        val result = useCase.invoke(Mocks.UserDetails.detailsDefault.id!!)
 
-        verify(observer).onEach(argWhere {
-            it == expected
-        })
-
-        observer.cancel()
+        assert(result == expected)
     }
 
-    companion object {
-        private val DEFAULT_USER = UserDetails(
-            "a312b3ee-84c2-11eb-8dcd-0242ac130003",
-            "Testnick",
-            "test@test.com",
-            "Test description"
-        )
-    }
 }

@@ -1,0 +1,69 @@
+[versions]
+agp = "8.13.1"
+kotlin = "2.0.21"
+coreKtx = "1.17.0"
+junit = "4.13.2"
+junitParameterized = "1.1.1"
+junitAndroidx = "1.3.0"
+espressoCore = "3.7.0"
+coroutinesTest = "1.10.2"
+mockitoCore = "5.21.0"
+mockitoKotlin = "6.1.0"
+androidxCoreTesting = "2.2.0"
+kotlinSerialization = "2.0.21"
+kotlinSerializationJson = "1.8.0"
+lifecycleRuntimeKtx = "2.10.0"
+activityCompose = "1.12.1"
+composeBom = "2024.09.00"
+navigation = "1.0.0"
+navigationLifecycle = "2.10.0"
+koinBom = "4.1.1"
+glide = "1.0.0-beta01"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-navigation-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation" }
+androidx-navigation-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation" }
+androidx-navigation-lifecycle = { module = "androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "navigationLifecycle" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref="kotlinSerializationJson"}
+
+# Test
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+junit-parameterized = { group = "pl.pragmatists", name = "JUnitParams", version.ref = "junitParameterized" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitAndroidx" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockitoCore" }
+mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
+androidx-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "androidxCoreTesting" }
+
+# Koin
+koin-bom = { module = "io.insert-koin:koin-bom", version.ref = "koinBom" }
+koin-core = { module = "io.insert-koin:koin-core" }
+koin-android = { module = "io.insert-koin:koin-android" }
+koin-androidx-compose = { module = "io.insert-koin:koin-androidx-compose" }
+#TODO: add navigation to DI
+#koin-androidx-compose-navigation = { module = "io.insert-koin:koin-compose-navigation3" }
+koin-test = { module = "io.insert-koin:koin-test" }
+koin-test-junit = { module = "io.insert-koin:koin-test-junit4" }
+
+# Other
+glide = { module = "com.github.bumptech.glide:compose", version.ref="glide"}
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize",  version.ref = "kotlin"  }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinSerialization"}
+

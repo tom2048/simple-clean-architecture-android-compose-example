@@ -1,267 +1,295 @@
+@file:Suppress("SpellCheckingInspection")
+
 package com.example.simplecleanarchitecture.users.ui.userlist
 
-import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.example.simplecleanarchitecture.R
-import com.example.simplecleanarchitecture.RouterScreen
 import com.example.simplecleanarchitecture.core.lib.TestException
 import com.example.simplecleanarchitecture.core.lib.extensions.last
 import com.example.simplecleanarchitecture.core.lib.resources.AppResources
 import com.example.simplecleanarchitecture.core.lib.schedulers.MainCoroutineRule
 import com.example.simplecleanarchitecture.core.lib.utils.DefaultTestHelper
 import com.example.simplecleanarchitecture.core.lib.utils.TestHelper
-import com.example.simplecleanarchitecture.core.lib.utils.runViewModelTest
-import com.example.simplecleanarchitecture.core.repository.model.UserDetails
-import com.example.simplecleanarchitecture.users.ui.userlist.UserListViewModel.UiEffect.Message
-import com.example.simplecleanarchitecture.users.ui.userlist.UserListViewModel.UiEffect.Routing
-import com.example.simplecleanarchitecture.users.usecase.user.UserDeleteUseCase
-import com.example.simplecleanarchitecture.users.usecase.user.UserShowListUseCase
-import com.github.terrakok.cicerone.Forward
+import com.example.simplecleanarchitecture.core.lib.utils.mockObserver
+import com.example.simplecleanarchitecture.core.lib.utils.observe
+import com.example.simplecleanarchitecture.core.mock.Mocks
+import com.example.simplecleanarchitecture.data.repository.model.UserDetails
+import com.example.simplecleanarchitecture.ui.screen.userlist.UserListUiModel.Effect.OpenUserEdit
+import com.example.simplecleanarchitecture.ui.screen.userlist.UserListUiModel.Effect.OpenUserPasswordChange
+import com.example.simplecleanarchitecture.ui.screen.userlist.UserListUiModel.Effect.ShowMessage
+import com.example.simplecleanarchitecture.ui.screen.userlist.UserListViewModel
+import com.example.simplecleanarchitecture.domain.usecase.user.UserDeleteUseCase
+import com.example.simplecleanarchitecture.domain.usecase.user.UserShowListUseCase
+import junitparams.JUnitParamsRunner
+import junitparams.Parameters
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
+import org.koin.test.KoinTest
+import org.koin.test.KoinTestRule
+import org.koin.test.get
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argWhere
-import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.atLeastOnce
+import org.mockito.kotlin.doSuspendableAnswer
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.inOrder
+import org.mockito.kotlin.isA
+import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.reset
+import org.mockito.kotlin.stub
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
+
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class UserListViewModelTest : TestHelper by DefaultTestHelper() {
+@RunWith(JUnitParamsRunner::class)
+class UserListViewModelTest : TestHelper by DefaultTestHelper(), KoinTest {
 
     @get:Rule
     var coroutineRule = MainCoroutineRule()
 
     @get:Rule
-    var instantExecutorRule = InstantTaskExecutorRule()
-
-    private lateinit var viewModel: UserListViewModel
-
-    private lateinit var userShowListUseCase: UserShowListUseCase
-    private lateinit var userDeleteUseCase: UserDeleteUseCase
-
-    private lateinit var appResources: AppResources
-
-
-    @BeforeTest
-    fun setUp() {
-        prepareLifecycle()
-        userShowListUseCase = mock()
-        userDeleteUseCase = mock()
-        appResources = mock {
-            on { getStringResource(R.string.common_communication_error) } doReturn "Test error message."
-            on { getStringResource(R.string.user_delete_success_message) } doReturn "User deleted."
-        }
-        viewModel = UserListViewModel(
-            userShowListUseCase,
-            userDeleteUseCase,
-            appResources
+    var koinTestRule = KoinTestRule.create {
+        modules(
+            module {
+                single { createTestDispatchers() }
+                single { createTestAppResources() }
+                single { mock<UserShowListUseCase>() }
+                single { mock<UserDeleteUseCase>() }
+                viewModel { UserListViewModel(get(), get(), get(), get()) }
+            }
         )
+        setMocks()
     }
 
-    @AfterTest
-    fun tearDown() {
-        cleanUpLifecycle()
-        invokeViewModelOnCleared(viewModel)
-    }
-
-
-    @Test
-    fun `loadUsers() provides the list when the proper data is loaded`() =
-        runViewModelTest(viewModel) { stateObserver, _ ->
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST))
-
-            viewModel.loadUsers()
-
-            verify(stateObserver, last()).onEach(argWhere { it.userList.map { item -> item.user } == DEFAULT_USER_LIST })
+    private fun setMocks(
+        getUserList: () -> List<UserDetails> = { Mocks.UserDetails.listDefault },
+        deleteUser: (String) -> Unit = {}
+    ) {
+        get<UserShowListUseCase>().stub {
+            reset(mock)
+            onBlocking { invoke() }.doSuspendableAnswer {
+                yield()
+                getUserList.invoke()
+            }
         }
+        get<UserDeleteUseCase>().stub {
+            reset(mock)
+            onBlocking { invoke(any()) }.doSuspendableAnswer {
+                yield()
+                deleteUser.invoke(it.arguments.first().toString())
+            }
+        }
+    }
+
+    private fun getViewModel(): UserListViewModel =
+        get<UserListViewModel>()
 
 
     @Test
-    fun `loadUsers() shows the error dialog when there is an error while loading the data`() =
-        runViewModelTest(viewModel) { stateObserver, effectObserver ->
-            val expectedMessage = appResources.getStringResource(R.string.common_communication_error)
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(TestException()))
+    fun `should show the user list when viewmodel is created and the proper data is loaded`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { _, stateObserver, _ ->
+            advanceUntilIdle()
 
-            viewModel.loadUsers()
+            verify(stateObserver, last()).onEach(argWhere { it.userList.map { item -> item.user } == Mocks.UserDetails.listDefault })
+        }
+    }
+
+    @Test
+    fun `should show the error dialog when there is an error while loading the data`() = runTest(StandardTestDispatcher()) {
+        setMocks(getUserList = { throw TestException() })
+        getViewModel().observe(this) { stateObserver, effectObserver ->
+            val expectedMessage = get<AppResources>().getStringResource(R.string.common_communication_error)
+            advanceUntilIdle()
 
             verify(stateObserver, never()).onEach(argWhere { it.userList.isNotEmpty() })
-            verify(effectObserver, last()).onEach(argWhere { it is Message && it.text == expectedMessage })
+            verify(effectObserver, last()).onEach(argWhere { it is ShowMessage && it.text == expectedMessage })
         }
-
+    }
 
     @Test
-    fun `loadUsers() shows and then hides the preloader when the proper data is being loaded`() =
-        runViewModelTest(viewModel) { stateObserver, _ ->
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST))
-
-            viewModel.loadUsers()
+    fun `should show and then hide the preloader when the proper data is being loaded`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { stateObserver, _ ->
+            advanceUntilIdle()
 
             inOrder(stateObserver) {
                 verify(stateObserver, times(1)).onEach(argWhere { it.preloader })
                 verify(stateObserver, times(1)).onEach(argWhere { !it.preloader })
             }
         }
-
+    }
 
     @Test
-    fun `loadUsers() shows and then hides the preloader when there is an error while loading the data`() =
-        runViewModelTest(viewModel) { stateObserver, _ ->
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(TestException()))
-
-            viewModel.loadUsers()
+    fun `should show and then hide the preloader when there is an error while loading the data`() = runTest(StandardTestDispatcher()) {
+        setMocks({ throw TestException() })
+        getViewModel().observe(this) { stateObserver, _ ->
+            advanceUntilIdle()
 
             inOrder(stateObserver) {
                 verify(stateObserver, times(1)).onEach(argWhere { it.preloader })
                 verify(stateObserver, times(1)).onEach(argWhere { !it.preloader })
             }
         }
-
+    }
 
     @Test
-    fun `addNewUser() opens the user edit form`() =
-        runViewModelTest(viewModel) { _, effectObserver ->
+    fun `should open user add form when add user option is clicked`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { viewModel, _, effectObserver ->
+            advanceUntilIdle()
+
             viewModel.addNewUser()
-
-            verify(
-                effectObserver,
-                times(1)
-            ).onEach(argWhere { it is Routing && it.command is Forward && (it.command as Forward).screen is RouterScreen.UserEditScreen })
-        }
-
-
-    @Test
-    fun `Given user id, when editUser(), then edit user form is opened`() =
-        runViewModelTest(viewModel) { _, effectObserver ->
-            viewModel.editUser(DEFAULT_USER_LIST.first().id!!)
-
-            verify(effectObserver).onEach(argWhere {
-                it is Routing && it.command is Forward &&
-                        (it.command as Forward).let { command ->
-                            command.screen is RouterScreen.UserEditScreen &&
-                                    (command.screen as RouterScreen.UserEditScreen).id == DEFAULT_USER_LIST.first().id
-                        }
-            })
-        }
-
-
-    @Test
-    fun `deleteUser() shows the confirmation dialog`() =
-        runViewModelTest(viewModel) { stateObserver, effectObserver ->
-            viewModel.deleteUser(DEFAULT_USER_LIST.first().id!!)
-
-            verify(stateObserver, times(1)).onEach(argWhere { it.userActionConfirmation == DEFAULT_USER_LIST.first().id })
-        }
-
-
-    @Test
-    fun `deleteUserConfirmed() shows the confirmation message when the user is deleted`() =
-        runViewModelTest(viewModel) { _, effectObserver ->
-            whenever(userDeleteUseCase.invoke(any())).thenReturn(testFlowOf())
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST))
-            val expectedMessage = appResources.getStringResource(R.string.user_delete_success_message)
-
-            viewModel.deleteUserConfirmed(DEFAULT_USER_LIST.first().id!!)
-
-            verify(effectObserver).onEach(argWhere { it is Message && it.text == expectedMessage })
-        }
-
-
-    @Test
-    fun `deleteUserConfirmed() updates the list when user is deleted`() =
-        runViewModelTest(viewModel) { stateObserver, _ ->
-            whenever(userDeleteUseCase.invoke(any())).thenReturn(testFlowOf())
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST.subList(1, 2)))
-
-            viewModel.deleteUserConfirmed(DEFAULT_USER_LIST.first().id!!)
-
-            verify(stateObserver, last()).onEach(argWhere { it.userList.map { item -> item.user } == DEFAULT_USER_LIST.subList(1, 2) })
-        }
-
-
-    @Test
-    fun `deleteUserConfirmed() shows and then hides the preloader when user is properly deleted`() =
-        runViewModelTest(viewModel) { stateObserver, _ ->
-            whenever(userDeleteUseCase.invoke(any())).thenReturn(testFlowOf())
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST))
-
-            viewModel.deleteUserConfirmed(DEFAULT_USER_LIST.first().id!!)
-
-            inOrder(stateObserver) {
-                verify(stateObserver).onEach(argWhere { it.preloader })
-                verify(stateObserver).onEach(argWhere { !it.preloader })
-            }
-            stateObserver.cancel()
-        }
-
-
-    @Test
-    fun `deleteUserConfirmed() shows and then hides the preloader when there was an error while deleting the user`() =
-        runViewModelTest(viewModel) { stateObserver, _ ->
-            whenever(userDeleteUseCase.invoke(any())).thenReturn(testFlowOf(TestException()))
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST))
-
-            viewModel.deleteUserConfirmed(DEFAULT_USER_LIST.first().id!!)
-
-            inOrder(stateObserver) {
-                verify(stateObserver).onEach(argWhere { it.preloader })
-                verify(stateObserver).onEach(argWhere { !it.preloader })
-            }
-            stateObserver.cancel()
-        }
-
-
-    @Test
-    fun `deleteUserConfirmed() displays an error message when there was an error while deleting the user`() =
-        runViewModelTest(viewModel) { _, effectObserver ->
-            whenever(userDeleteUseCase.invoke(any())).thenReturn(testFlowOf(TestException()))
-            whenever(userShowListUseCase.invoke()).thenReturn(testFlowOf(DEFAULT_USER_LIST))
-
-            viewModel.deleteUserConfirmed(DEFAULT_USER_LIST.first().id!!)
-
-            verify(effectObserver, times(1)).onEach(argWhere { it is Message })
-        }
-
-
-    @Test
-    fun `changeUserPassword() opens change password screen`() =
-        runViewModelTest(viewModel) { _, effectObserver ->
-            viewModel.changeUserPassword(DEFAULT_USER_LIST.first().id!!)
+            advanceUntilIdle()
 
             verify(effectObserver, times(1)).onEach(argWhere {
-                it is Routing && it.command == Forward(
-                    RouterScreen.UserPasswordChangeScreen(
-                        DEFAULT_USER_LIST.first().id!!
-                    ), true
-                )
+                it is OpenUserEdit && it.id == null
             })
         }
+    }
 
-    companion object {
-        private val DEFAULT_USER_LIST = listOf(
-            UserDetails(
-                "a312b3ee-84c2-11eb-8dcd-0242ac130003",
-                "Nickname1",
-                "nickname1@test.com",
-                "Test description 1"
-            ),
-            UserDetails(
-                "3b04aacf-4320-48bb-8171-af512aae0894",
-                "Nickname2",
-                "nickname2@test.com",
-                "Test description 1"
-            ),
-            UserDetails(
-                "52408bc4-4cdf-49ef-ac54-364bfde3fbf0",
-                "Nickname3",
-                "nickname3@test.com",
-                "Test description 1"
-            )
-        )
+    @Test
+    fun `should open edit user form when edit user option is clicked`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { viewModel, _, effectObserver ->
+            advanceUntilIdle()
+
+            viewModel.editUser(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+
+            verify(effectObserver).onEach(argWhere {
+                it is OpenUserEdit && it.id == Mocks.UserDetails.listDefault.first().id
+            })
+        }
+    }
+
+    @Test
+    fun `should show the confirmation dialog when delete user option is clicked`() = runTest(StandardTestDispatcher()) {
+        val viewModel = getViewModel()
+        val observer = viewModel.uiState.map { it.userActionConfirmation }.mockObserver(this, true)
+        val id = Mocks.UserDetails.listDefault.first().id!!
+        advanceUntilIdle()
+
+        viewModel.deleteUser(id)
+        advanceUntilIdle()
+
+        verify(observer, last()).onEach(eq(id))
+        observer.cancel()
+    }
+
+    @Test
+    fun `should show the confirmation message when user deletion is confirmed`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { viewModel, _, effectObserver ->
+            val expectedMessage = get<AppResources>().getStringResource(R.string.user_delete_success_message)
+            advanceUntilIdle()
+
+            viewModel.deleteUserConfirmed(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+
+            verify(effectObserver, atLeastOnce()).onEach(argWhere {
+                it is ShowMessage && it.text == expectedMessage
+            })
+        }
+    }
+
+    @Test
+    @Parameters("true", "false")
+    fun `should hide the confirmation message when user deletion is canceled or confirmed`(isApproved: Boolean) = runTest(StandardTestDispatcher()) {
+        val viewModel = getViewModel()
+        val observer = viewModel.uiState.map { it.userActionConfirmation }.mockObserver(this, true)
+        advanceUntilIdle()
+
+        if (isApproved) {
+            viewModel.cancelUserAction()
+        } else {
+            viewModel.cancelUserAction()
+        }
+        advanceUntilIdle()
+
+        verify(observer, last()).onEach(isNull())
+        observer.cancel()
+    }
+
+    @Test
+    fun `should refresh user list when user is properly deleted`() = runTest(StandardTestDispatcher()) {
+        setMocks(getUserList = { Mocks.UserDetails.listDefault })
+        getViewModel().observe(this) { viewModel, stateObserver, _ ->
+            advanceUntilIdle()
+            setMocks(getUserList = { Mocks.UserDetails.listDefault.subList(1, 2) })
+
+            viewModel.deleteUserConfirmed(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+            advanceTimeBy(10000)
+
+            verify(stateObserver, last()).onEach(argWhere {
+                it.userList.map { item -> item.user } == Mocks.UserDetails.listDefault.subList(1, 2)
+            })
+        }
+    }
+
+    @Test
+    fun `should show and then hide the preloader when user is properly deleted`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { viewModel, stateObserver, _ ->
+            advanceUntilIdle()
+            viewModel.deleteUserConfirmed(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+
+            inOrder(stateObserver) {
+                verify(stateObserver).onEach(argWhere { it.preloader })
+                verify(stateObserver).onEach(argWhere { !it.preloader })
+            }
+            stateObserver.cancel()
+        }
+    }
+
+    @Test
+    fun `should show and then hide the preloader when there was an error while deleting the user`() = runTest(StandardTestDispatcher()) {
+        setMocks(deleteUser = { throw TestException() })
+        getViewModel().observe(this) { viewModel, stateObserver, _ ->
+            advanceUntilIdle()
+
+            viewModel.deleteUserConfirmed(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+
+            inOrder(stateObserver) {
+                verify(stateObserver).onEach(argWhere { it.preloader })
+                verify(stateObserver).onEach(argWhere { !it.preloader })
+            }
+            stateObserver.cancel()
+        }
+    }
+
+    @Test
+    fun `should show an error message when there was an error while deleting the user`() = runTest(StandardTestDispatcher()) {
+        setMocks(deleteUser = { throw TestException() })
+        getViewModel().observe(this) { viewModel, _, effectObserver ->
+            advanceUntilIdle()
+            viewModel.deleteUserConfirmed(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+
+            verify(effectObserver, times(1)).onEach(isA<ShowMessage>())
+        }
+    }
+
+    @Test
+    fun `should open change password screen when change password option is clicked`() = runTest(StandardTestDispatcher()) {
+        getViewModel().observe(this) { viewModel, _, effectObserver ->
+            advanceUntilIdle()
+
+            viewModel.changeUserPassword(Mocks.UserDetails.listDefault.first().id!!)
+            advanceUntilIdle()
+
+            verify(effectObserver, times(1)).onEach(argWhere {
+                it is OpenUserPasswordChange && it.id == Mocks.UserDetails.listDefault.first().id!!
+            })
+        }
     }
 }

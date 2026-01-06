@@ -13,7 +13,7 @@ object Patterns {
                 "[a-zA-Z0-9][a-zA-Z0-9\\-]{0,25}" +
                 ")+"
     )
-    val PASSWORD: Pattern = Pattern.compile("^.{8,64}\$")
-    val ALPHANUMERIC: Pattern = Pattern.compile("^[a-zA-Z0-9 ]{0,200}\$")
+    val PASSWORD: Pattern = Pattern.compile("^.{8,64}$")
+    val ALPHANUMERIC: Pattern = Pattern.compile("^[a-zA-Z0-9 ]{0,200}$")
 
 }

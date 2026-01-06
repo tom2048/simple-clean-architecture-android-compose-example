@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.example.simplecleanarchitecture.core.lib.extensions
 
 import com.example.simplecleanarchitecture.core.lib.extensions.matchers.First

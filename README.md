@@ -48,6 +48,7 @@ View layer is responsible for visual representation of the ViewModel data on scr
 
 ## Practical/pragmatic remarks:
 
+- to combine the specific architecture of Android application with the principles of Clean Architecture we will follow the guidelines described here: https://developer.android.com/codelabs/basic-android-kotlin-compose-viewmodel-and-state#0 and we will build our architecture based on top of this approach
 - it's hard to completely avoid references to Android classes in any part of code as sometimes there
   is just no effective way to reconcile
   the functional requirements (e.g. Parcelable data classes, libraries dependencies). As the main
@@ -71,7 +72,7 @@ When using the project structure described above, it's also possible to easily i
    - use case interfaces
    - repository interfaces
    - set of empty unit and snapshot tests which after implementation will verify the previously mentioned elements
-  
+
    If necessary, the components above can be determined by one person. However, collaborative agreements allow for a broader perspective on the project and capture a greater number of edge cases and possible issues. This results in more precise preliminary agreements and the better project awareness among the team members.
    
    Next, all those empty components are committed and pushed to the repository. We can use separate feature branch for this particular screen.
@@ -133,3 +134,4 @@ Bob, Alice and John are developers working in a three-person team together. The 
    - other minor issues are also found and fixed
    - the working project can be finished
 
+    
